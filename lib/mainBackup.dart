@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'task_repository.dart';
+import 'services/task_api_service.dart';
 
 
 void main() {
@@ -182,30 +183,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     );
                   },
-                  child: TaskCard(
-                    title: TaskRepository.tasks[index].title,
-                    subtitle:
-                    "termin: ${TaskRepository.tasks[index].deadline} + priorytet ${TaskRepository.tasks[index].priority}",
-                    done: task.done,
-                    Onchanged: (value) {
-                      setState(() {
-                        task.done = value!;
-                      });
-                    },
-                    onTap: () async {
-                      final Task? updatedTask = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => EditTaskScreen(task: task),
-                        ),
-                      );
-                      if (updatedTask != null) {
-                        setState(() {
-                          TaskRepository.tasks[index] = updatedTask;
-                        });
-                      }
-                    },
-                  ),
+
+                  //child:TaskListScreen(
+                  // title:
+                  // )
+
                 );
               },
             ),
@@ -372,3 +354,56 @@ class EditTaskScreen extends StatelessWidget{
         ),
       ),
     );}}
+
+class TaskListScreen extends StatefulWidget {
+  const TaskListScreen({super.key});
+  @override
+  State<TaskListScreen> createState() => _TaskListScreenState();
+}class _TaskListScreenState extends State<TaskListScreen> {
+  late Future<List<Task>> tasksFuture;
+  @override
+  void initState() {
+    super.initState();
+    tasksFuture = TaskApiService.fetchTasks();
+  }
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Task>>(
+      future: tasksFuture,
+      builder: (context, snapshot) {
+        final tasks = snapshot.data ?? [];
+        return ListView.builder(
+          itemCount: tasks.length,
+          itemBuilder: (context, index) {
+                return  TaskCard(
+                  title: TaskRepository.tasks[index].title,
+                  subtitle:
+                  "termin: ${TaskRepository.tasks[index].deadline} + priorytet ${TaskRepository.tasks[index].priority}",
+                  done: tasks.,
+                  Onchanged: (value) {
+                    setState(() {
+                      tasks.done = value!;
+                    });
+                  },
+                  onTap: () async {
+                    final Task? updatedTask = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => EditTaskScreen(task: tasks),
+                      ),
+                    );
+                    if (updatedTask != null) {
+                      setState(() {
+                        TaskRepository.tasks[index] = updatedTask;
+                      });
+                    }
+                  },
+
+
+                );
+          },
+        );
+      },
+    );
+  }
+}

@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import 'task_repository.dart';
+import 'services/task_api_service.dart';
+
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../task_repository.dart';
 
 
 void main() {
@@ -28,6 +33,15 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   String selectedFilter = "wszystkie";
   String filter = "wszystkie";
+  late Future<List<Task>> tasksFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    tasksFuture = TaskApiService.fetchTasks();
+  }
+
+
   @override
   Widget build(BuildContext context) {
 
@@ -215,46 +229,36 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           Expanded(
-            child: ListView.builder(
-              itemCount: filteredTasks.length,
-              itemBuilder: (context, index) {
-                final task = filteredTasks[index];
-                return Dismissible(
-                  key: ValueKey(task.title),
-                  onDismissed: (direction) {
-                    setState(() {
-                      TaskRepository.tasks.remove(task);
-                    });
-                    // dodatkowy kod wykonywany po usunięciu np. snackbar
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text("Zadanie zostało usunięte"),
-                      ),
+            child: FutureBuilder<List<Task>>(
+              future: tasksFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Center(
+                    child: CircularProgressIndicator(),
+                  );
+                }
+
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text("Błąd: ${snapshot.error}"),
+                  );
+                }
+
+                final tasks = snapshot.data ?? [];
+
+                return ListView.builder(
+                  itemCount: tasks.length,
+                  itemBuilder: (context, index) {
+                    final task = tasks[index];
+
+                    return TaskCard(
+                      title: task.title,
+                      subtitle: "termin: ${task.deadline} + priorytet ${task.priority}",
+                      done: task.done,
+                      Onchanged: null,
+                      onTap: null,
                     );
                   },
-                  child: TaskCard(
-                    title: task.title,
-                    subtitle:"termin: ${task.deadline} + priorytet ${task.priority}",
-                    done: task.done,
-                    Onchanged: (value) {
-                      setState(() {
-                        task.done = value!;
-                      });
-                    },
-                    onTap: () async {
-                      final Task? updatedTask = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => EditTaskScreen(task: task),
-                        ),
-                      );
-                      if (updatedTask != null) {
-                        setState(() {
-                          TaskRepository.tasks[index] = updatedTask;
-                        });
-                      }
-                    },
-                  ),
                 );
               },
             ),
@@ -421,3 +425,5 @@ class EditTaskScreen extends StatelessWidget{
         ),
       ),
     );}}
+
+

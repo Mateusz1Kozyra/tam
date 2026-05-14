@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import '../../task_repository.dart';
+import 'task_repository.dart';
 
 class TaskApiService {
   static const String baseUrl = "https://dummyjson.com";

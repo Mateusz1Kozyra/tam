@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
-import 'task_repository.dart';
+import 'services/task_repository.dart';
 import 'services/task_api_service.dart';
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import '../task_repository.dart';
+import 'services/task_repository.dart';
 
+import 'package:hive_ce_flutter/hive_flutter.dart';
 
-void main() {
-  runApp(MyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Hive.initFlutter(); // inicjalizacja
+  await Hive.openBox("tasks"); // otwarcie kontenera
+runApp(const MyApp());
 }
-
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -34,12 +37,32 @@ class _HomeScreenState extends State<HomeScreen> {
   String selectedFilter = "wszystkie";
   String filter = "wszystkie";
   late Future<List<Task>> tasksFuture;
+  int alltasksCount=0;
+  int doneTasksCount=0;
+  int todoTasksCount=0;
+
+
+  void updateCounters(List<Task> tasks) {
+    setState(() {
+      allTasksCount = tasks.length;
+      doneTasksCount = tasks.where((task) => task.done).length;
+      todoTasksCount = tasks.where((task) => !task.done).length;
+    });
+  }
+
+
 
   @override
   void initState() {
     super.initState();
-    tasksFuture = TaskApiService.fetchTasks();
+    tasksFuture = loadTasks();
   }
+  Future<List<Task>> loadTasks() async {
+    await TaskSyncService.loadInitialDataIfNeeded();
+    return TaskLocalDatabase.getTasks();
+  }
+
+
 
 
   @override
@@ -229,7 +252,8 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           Expanded(
-            child: FutureBuilder<List<Task>>(
+
+              child: FutureBuilder<List<Task>>(
               future: tasksFuture,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -246,6 +270,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 final tasks = snapshot.data ?? [];
 
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  widget.onTasksLoaded(tasks);
+                });
+
+
                 return ListView.builder(
                   itemCount: tasks.length,
                   itemBuilder: (context, index) {
@@ -255,14 +284,46 @@ class _HomeScreenState extends State<HomeScreen> {
                       title: task.title,
                       subtitle: "termin: ${task.deadline} + priorytet ${task.priority}",
                       done: task.done,
-                      Onchanged: null,
-                      onTap: null,
+                      Onchanged: (value) async {
+                      final updatedTask = Task(
+                        id: task.id,
+                        title: task.title,
+                        deadline: task.deadline,
+                        priority: task.priority,
+                        done: value ?? false,
+                      );
+                      await TaskLocalDatabase.updateTask(updatedTask);
+                      setState(() {
+                        tasksFuture = loadTasks();
+                      });
+                    },
+
+                    onTap: () async {
+                        final Task? updatedTask = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => EditTaskScreen(task: task),
+                          ),
+                        );
+                        if (updatedTask != null) {
+                          await TaskLocalDatabase.updateTask(updatedTask);
+                          setState(() {
+                            tasksFuture = loadTasks();
+                          });
+                        }
+                      },
+
                     );
                   },
                 );
               },
             ),
           ),
+          Expanded(
+            child: TaskListScreen(
+              onTasksLoaded: updateCounters,
+            ),
+          )
         ],
       ),
     );
@@ -427,3 +488,47 @@ class EditTaskScreen extends StatelessWidget{
     );}}
 
 
+class Task {
+  final int id;
+  final String title;
+  final String deadline;
+  final String priority;
+  final bool done;
+
+  Task({
+    required this.id,
+    required this.title,
+    required this.deadline,
+    required this.priority,
+    required this.done,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      "id": id,
+      "title": title,
+      "deadline": deadline,
+      "priority": priority,
+      "done": done,
+    };
+  }
+
+  factory Task.fromMap(Map map) {
+    return Task(
+      id: map["id"],
+      title: map["title"],
+      deadline: map["deadline"],
+      priority: map["priority"],
+      done: map["done"],
+    );
+  }
+}
+class TaskListScreen extends StatefulWidget {
+  final ValueChanged<List<Task>> onTasksLoaded;
+  const TaskListScreen({
+    super.key,
+    required this.onTasksLoaded,
+  });
+  @override
+  State<TaskListScreen> createState() => _TaskListScreenState();
+}
